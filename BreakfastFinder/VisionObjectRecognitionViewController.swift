@@ -10,18 +10,57 @@ import AVFoundation
 import Vision
 
 class VisionObjectRecognitionViewController: ViewController {
-    
+    private var objectDetected = false
+
     private var detectionOverlay: CALayer! = nil
     
     // Vision parts
     private var requests = [VNRequest]()
+    
+    // Define the button
+    private let actionButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setTitle("Go to Next Page", for: .normal)
+        button.backgroundColor = .systemBlue
+        button.setTitleColor(.white, for: .normal)
+        button.layer.cornerRadius = 10
+        button.addTarget(self, action: #selector(buttonTapped), for: .touchUpInside)
+        return button
+    }()
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        
+        // Add the button to the view
+        view.addSubview(actionButton)
+        setupButtonConstraints()
+    }
+    
+    // Define the button action
+    @objc func buttonTapped() {
+        print("hola")
+        // Navigate to SecondViewController
+        let secondViewController = SecondViewController()
+        navigationController?.pushViewController(secondViewController, animated: true)
+    }
+       
+       // Setup button constraints
+       func setupButtonConstraints() {
+           actionButton.translatesAutoresizingMaskIntoConstraints = false
+           NSLayoutConstraint.activate([
+               actionButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+               actionButton.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -50),
+               actionButton.widthAnchor.constraint(equalToConstant: 200),
+               actionButton.heightAnchor.constraint(equalToConstant: 50)
+           ])
+       }
     
     @discardableResult
     func setupVision() -> NSError? {
         // Setup Vision parts
         let error: NSError! = nil
         
-        guard let modelURL = Bundle.main.url(forResource: "ObjectDetector", withExtension: "mlmodelc") else {
+        guard let modelURL = Bundle.main.url(forResource: "RecycleDetector", withExtension: "mlmodelc") else {
             return NSError(domain: "VisionObjectRecognitionViewController", code: -1, userInfo: [NSLocalizedDescriptionKey: "Model file is missing"])
         }
         do {
@@ -30,7 +69,9 @@ class VisionObjectRecognitionViewController: ViewController {
                 DispatchQueue.main.async(execute: {
                     // perform all the UI updates on the main queue
                     if let results = request.results {
-                        self.drawVisionRequestResults(results)
+                        if self.objectDetected == false {
+                            self.drawVisionRequestResults(results)
+                        }
                     }
                 })
             })
@@ -60,9 +101,28 @@ class VisionObjectRecognitionViewController: ViewController {
                                                             identifier: topLabelObservation.identifier,
                                                             confidence: topLabelObservation.confidence)
             shapeLayer.addSublayer(textLayer)
+            
+            
+            if topLabelObservation.confidence > 0.99{
+                objectDetected = true
+                let alertController = UIAlertController(title: "Object Detected", message: "Identifier: \(topLabelObservation.identifier)\nConfidence: \(topLabelObservation.confidence)", preferredStyle: .alert)
+                alertController.addAction(UIAlertAction(title: "OK", style: .default, handler: { _ in
+                    self.objectDetected = false
+                }))
+                
+                // Present the alert controller
+                DispatchQueue.main.async {
+                    self.present(alertController, animated: true, completion: nil)
+                }
+            }
+
+            
+            
             detectionOverlay.addSublayer(shapeLayer)
+            
         }
         self.updateLayerGeometry()
+        
         CATransaction.commit()
     }
     
@@ -88,9 +148,9 @@ class VisionObjectRecognitionViewController: ViewController {
         setupLayers()
         updateLayerGeometry()
         setupVision()
-        
         // start the capture
         startCaptureSession()
+       
     }
     
     func setupLayers() {
